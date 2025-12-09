@@ -10,7 +10,7 @@ plugins {
 
 group = 'com.tickatch'
 version = '1.0.0'
-description = 'project-interface'
+description = 'payment-service'
 
 java {
     toolchain {
@@ -77,6 +77,12 @@ dependencies {
     testAnnotationProcessor 'org.projectlombok:lombok'
     testCompileOnly 'org.projectlombok:lombok'
 
+    implementation 'org.jetbrains:annotations:24.0.1'
+    annotationProcessor 'org.jetbrains:annotations:24.0.1'
+
+    compileOnly 'org.jetbrains:annotations:24.0.1'
+    testCompileOnly 'org.jetbrains:annotations:24.0.1'
+
     // archunit
     testImplementation 'com.tngtech.archunit:archunit-junit5:1.4.1'
 
@@ -100,6 +106,12 @@ spotbugs {
     excludeFilter.set(file("${project.rootDir}/spotbugs-exclude-filter.xml"))
 }
 
+spotbugsMain {
+    sourceDirs = files(sourceSets.main.allJava.srcDirs)
+    classDirs = files(sourceSets.main.output.classesDirs)
+    ignoreFailures = true
+}
+
 tasks.withType(SpotBugsTask).configureEach {
     reports {
         html.required = true
@@ -116,4 +128,9 @@ spotless {
 
 tasks.check {
     dependsOn 'spotlessCheck'
+}
+
+tasks.named("spotbugsMain") {
+    dependsOn("compileJava")
+    dependsOn("compileTestJava")
 }

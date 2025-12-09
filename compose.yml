@@ -6,6 +6,6 @@ services:
       - POSTGRES_USER=tickatch
       - POSTGRES_PASSWORD=@@Tickatch01
     ports:
-      - '5432:5432'
+      - '5434:5432'
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql

@@ -1,4 +1,4 @@
-package com.tickatch.projectinterface;
+package com.tickatch.paymentservice;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -12,7 +12,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * @since 1.0.0
  */
 @SpringBootApplication
-public class ProjectInterfaceApplication {
+public class PaymentServiceApplication {
 
   /**
    * 애플리케이션 실행 진입점.
@@ -20,6 +20,6 @@ public class ProjectInterfaceApplication {
    * @param args 명령줄 인자
    */
   public static void main(String[] args) {
-    SpringApplication.run(ProjectInterfaceApplication.class, args);
+    SpringApplication.run(PaymentServiceApplication.class, args);
   }
 }

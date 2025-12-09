@@ -1,4 +1,4 @@
-package com.tickatch.projectinterface;
+package com.tickatch.paymentservice;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
@@ -12,12 +12,12 @@ import com.tngtech.archunit.library.Architectures;
 import java.util.Arrays;
 
 @AnalyzeClasses(
-    packages = "com.tickatch.projectinterface",
+    packages = "com.tickatch.paymentservice",
     importOptions = ImportOption.DoNotIncludeTests.class)
 class LayeredArchitectureTest {
 
   private static final String[] DOMAIN_PACKAGES = {
-    "com.tickatch.projectinterface.example.domain..",
+    "com.tickatch.paymentservice.example.domain..",
   };
 
   @ArchTest
@@ -25,13 +25,13 @@ class LayeredArchitectureTest {
     Architectures.layeredArchitecture()
         .consideringOnlyDependenciesInLayers()
         .layer("Presentation")
-        .definedBy("com.tickatch.projectinterface..presentation..")
+        .definedBy("com.tickatch.paymentservice..presentation..")
         .layer("Application")
-        .definedBy("com.tickatch.projectinterface..application..")
+        .definedBy("com.tickatch.paymentservice..application..")
         .layer("Domain")
-        .definedBy("com.tickatch.projectinterface..domain..")
+        .definedBy("com.tickatch.paymentservice..domain..")
         .layer("Infrastructure")
-        .definedBy("com.tickatch.projectinterface..infrastructure..")
+        .definedBy("com.tickatch.paymentservice..infrastructure..")
         // Presentation은 하위 계층(Application, Domain, Infrastructure)만 접근 가능
         .whereLayer("Presentation")
         .mayOnlyAccessLayers("Application", "Domain", "Infrastructure")
@@ -47,7 +47,7 @@ class LayeredArchitectureTest {
         // global 패키지는 모든 계층에서 자유롭게 접근 가능하도록 제외
         .ignoreDependency(
             DescribedPredicate.alwaysTrue(),
-            JavaClass.Predicates.resideInAPackage("com.tickatch.projectinterface.global.."))
+            JavaClass.Predicates.resideInAPackage("com.tickatch.paymentservice.global.."))
         // 빈 레이어 허용
         .allowEmptyShould(true)
         .check(classes);
@@ -101,13 +101,13 @@ class LayeredArchitectureTest {
     }
 
     // global 패키지가 없으면 스킵
-    if (!hasClassesInPackage(classes, "com.tickatch.projectinterface.global..")) {
+    if (!hasClassesInPackage(classes, "com.tickatch.paymentservice.global..")) {
       return;
     }
 
     noClasses()
         .that()
-        .resideInAPackage("com.tickatch.projectinterface.global..")
+        .resideInAPackage("com.tickatch.paymentservice.global..")
         .should()
         .dependOnClassesThat()
         .resideInAnyPackage(DOMAIN_PACKAGES)

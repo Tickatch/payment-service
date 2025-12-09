@@ -8,7 +8,7 @@
 spring:
   # ===== 서비스 식별 정보 =====
   application:
-    name: ${APP_NAME:project-interface}  # 서비스명 (Eureka 등록, 로깅, 메트릭에 사용)
+    name: ${APP_NAME:payment-service}  # 서비스명 (Eureka 등록, 로깅, 메트릭에 사용)
 
   # ===== 프로파일 설정 =====
   profiles:

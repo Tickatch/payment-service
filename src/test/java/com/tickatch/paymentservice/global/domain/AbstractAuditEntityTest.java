@@ -1,4 +1,4 @@
-package com.tickatch.projectinterface.global.domain;
+package com.tickatch.paymentservice.global.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

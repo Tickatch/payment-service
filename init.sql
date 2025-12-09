@@ -1,1 +1,1 @@
-CREATE SCHEMA project_interface;
+CREATE SCHEMA payment_service;
