@@ -1,0 +1,119 @@
+import com.github.spotbugs.snom.SpotBugsTask
+
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.5.7'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'com.github.spotbugs' version '6.4.7'
+    id 'com.diffplug.spotless' version '8.1.0'
+}
+
+group = 'com.tickatch'
+version = '1.0.0'
+description = 'project-interface'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+    mockitoAgent
+}
+
+repositories {
+    mavenCentral()
+}
+
+ext {
+    set('springCloudVersion', "2025.0.0")
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+    }
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    // docker-compose
+    developmentOnly 'org.springframework.boot:spring-boot-docker-compose'
+
+    // Metrics - Prometheus
+    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+
+    // Tracing - Zipkin Brave
+    implementation 'io.micrometer:micrometer-tracing-bridge-brave'
+    implementation 'io.zipkin.reporter2:zipkin-reporter-brave'
+
+    // Logging - Logstash (ELK)
+    implementation 'net.logstash.logback:logstash-logback-encoder:8.0'
+
+    // spring cloud
+    implementation 'org.springframework.cloud:spring-cloud-starter-config'
+    implementation 'org.springframework.cloud:spring-cloud-starter-loadbalancer'
+    implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
+    implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+    implementation 'org.springframework.boot:spring-boot-starter-amqp'
+    implementation 'org.springframework.cloud:spring-cloud-starter-stream-rabbit'
+
+    // PostgreSQL
+    implementation 'org.postgresql:postgresql'
+
+    implementation 'io.github.tickatch:common-lib:0.0.4'
+
+    // lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+    testCompileOnly 'org.projectlombok:lombok'
+
+    // archunit
+    testImplementation 'com.tngtech.archunit:archunit-junit5:1.4.1'
+
+    runtimeOnly 'com.h2database:h2'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // mockito javaagent
+    mockitoAgent('org.mockito:mockito-core') {
+        transitive = false
+    }
+}
+
+tasks.withType(Test) {
+    useJUnitPlatform()
+    jvmArgs "-javaagent:${configurations.mockitoAgent.asPath}"
+}
+
+spotbugs {
+    excludeFilter.set(file("${project.rootDir}/spotbugs-exclude-filter.xml"))
+}
+
+tasks.withType(SpotBugsTask).configureEach {
+    reports {
+        html.required = true
+        xml.required = false
+    }
+}
+
+spotless {
+    java {
+        googleJavaFormat()
+        target 'src/**/*.java'
+    }
+}
+
+tasks.check {
+    dependsOn 'spotlessCheck'
+}

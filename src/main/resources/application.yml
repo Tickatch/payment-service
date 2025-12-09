@@ -1,0 +1,85 @@
+# ========================================
+# 마이크로서비스 개별 설정
+# ========================================
+# 이 파일은 각 마이크로서비스의 src/main/resources/application.yml에 위치
+# Config Server에서 공통 설정을 가져오고, 서비스별 고유 설정만 여기에 정의
+# ========================================
+
+spring:
+  # ===== 서비스 식별 정보 =====
+  application:
+    name: ${APP_NAME:project-interface}  # 서비스명 (Eureka 등록, 로깅, 메트릭에 사용)
+
+  # ===== 프로파일 설정 =====
+  profiles:
+    active: ${APP_PROFILE:local}  # 활성 프로파일 (local, dev, staging, prod)
+
+  # ===== docker 설정 =====
+  docker:
+    compose:
+      lifecycle-management: start_only  # docker 생명 주기 (none, start-only, start-and-stop)
+
+  # ===== Config Server 연동 =====
+  config:
+    import: optional:configserver:${CONFIG_SERVER_URL:https://www.pinjun.xyz/config}
+
+  cloud:
+    config:
+      # ----- Config Server 연결 설정 -----
+      uri: ${CONFIG_SERVER_URL:https://www.pinjun.xyz/config}
+
+      # Eureka를 통한 Config Server 탐색 (직접 URL 사용 시 false)
+      discovery:
+        enabled: false
+        service-id: config-server
+
+      # ----- 설정 오버라이드 정책 -----
+      allow-override: true          # 로컬 설정으로 Config Server 설정 오버라이드 허용
+      override-none: true           # Config Server 설정이 없을 때 로컬 설정 사용
+      override-system-properties: false  # 시스템 프로퍼티는 오버라이드하지 않음
+
+      # ----- 장애 대응 설정 -----
+      fail-fast: false              # Config Server 연결 실패시에도 애플리케이션 시작
+
+      # ----- 재시도 설정 -----
+      retry:
+        enabled: true
+        initial-interval: 1000      # 초기 재시도 간격 (1초)
+        max-attempts: 3             # 최대 재시도 횟수
+        max-interval: 2000          # 최대 재시도 간격 (2초)
+        multiplier: 1.1             # 재시도 간격 증가율
+
+# ========================================
+# Eureka Client 설정
+# ========================================
+eureka:
+  instance:
+    # ----- 인스턴스 식별 설정 -----
+    prefer-ip-address: false        # hostname 사용 (Docker 환경에서는 true 권장)
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
+    instance-id: ${spring.application.name}:${EUREKA_INSTANCE_HOSTNAME:localhost}:${server.port:8080}
+
+    # ----- 하트비트 설정 -----
+    lease-renewal-interval-in-seconds: 10   # 하트비트 전송 간격
+    lease-expiration-duration-in-seconds: 30  # 하트비트 만료 시간
+
+    # ----- 메타데이터 -----
+    metadata-map:
+      zone: ${ENVIRONMENT:local}
+      version: ${APP_VERSION:0.0.1-SNAPSHOT}
+
+  client:
+    # ----- 등록 및 조회 설정 -----
+    register-with-eureka: true      # Eureka 서버에 등록
+    fetch-registry: true            # 레지스트리 정보 가져오기
+    registry-fetch-interval-seconds: 5  # 레지스트리 갱신 간격
+
+    # ----- Eureka 서버 URL (HA 구성) -----
+    service-url:
+      defaultZone: ${EUREKA_DEFAULT_ZONE:https://www.pinjun.xyz/eureka1/eureka/,https://www.pinjun.xyz/eureka2/eureka/}
+
+# ========================================
+# 서버 설정
+# ========================================
+server:
+  port: ${SERVER_PORT:8080}
