@@ -13,8 +13,7 @@ public class PaymentException extends BusinessException {
     super(errorCode, errorArgs);
   }
 
-  public PaymentException(ErrorCode errorCode, Throwable cause,
-      Object... errorArgs) {
+  public PaymentException(ErrorCode errorCode, Throwable cause, Object... errorArgs) {
     super(errorCode, cause, errorArgs);
   }
 }

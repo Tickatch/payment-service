@@ -28,8 +28,7 @@ import lombok.NoArgsConstructor;
 public class Payment extends AbstractAuditEntity {
 
   // 결제 id
-  @EmbeddedId
-  private PaymentId id;
+  @EmbeddedId private PaymentId id;
 
   // 결제 상태
   @Enumerated(EnumType.STRING)
