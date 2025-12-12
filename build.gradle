@@ -76,7 +76,7 @@ dependencies {
     annotationProcessor 'jakarta.persistence:jakarta.persistence-api'
 
     implementation 'io.github.tickatch:common-lib:0.0.4'
-    implementation 'io.prometheus:simpleclient_pushgateway:0.16.0'
+    implementation 'io.prometheus:prometheus-metrics-exporter-pushgateway'
 
 
     // lombok
