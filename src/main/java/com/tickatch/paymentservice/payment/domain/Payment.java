@@ -10,17 +10,20 @@ import jakarta.persistence.EmbeddedId;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Table(name = "p_payment")
 @Entity
 @Getter
@@ -36,7 +39,8 @@ public class Payment extends AbstractAuditEntity {
   private PaymentStatus status;
 
   // 결제 금액
-  private Long totalAmount;
+  @Column(nullable = false)
+  private Long totalPrice;
 
   // 결제 수단
   @Enumerated(EnumType.STRING)
@@ -44,25 +48,31 @@ public class Payment extends AbstractAuditEntity {
   private PaymentMethod method;
 
   // 결제 세부 정보
-  @OneToOne(cascade = CascadeType.ALL)
-  @JoinColumn(name = "detail_id")
+  @OneToOne(mappedBy = "payment", cascade = CascadeType.ALL)
   private PaymentDetail detail;
 
+  // 결제 식별용 uuid(toss)
+  @Column(nullable = false, updatable = false)
+  private UUID orderId;
+
   // 재시도 횟수
-  private int retryCount = 0;
+  @Column private int retryCount = 0;
+
+  //  @Column
+  //  private String log;
 
   // 취소 이유
   @Enumerated(EnumType.STRING)
   private CancelReason cancelReason;
 
   // 결제 승인 시각
-  private LocalDateTime approvedAt;
+  @Column private LocalDateTime approvedAt;
 
   // 결제 취소 시각
-  private LocalDateTime canceledAt;
+  @Column private LocalDateTime canceledAt;
 
   // 환불 시각
-  private LocalDateTime refundedAt;
+  @Column private LocalDateTime refundedAt;
 
   // 결제에 대한 예매 목록
   @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL)
@@ -71,24 +81,30 @@ public class Payment extends AbstractAuditEntity {
   // =================================
 
   // 생성
+  @Builder(access = AccessLevel.PRIVATE)
+  public Payment(PaymentMethod method, PaymentStatus status, Long totalPrice, UUID orderId) {
+    this.id = PaymentId.of();
+    this.method = method;
+    this.status = status;
+    this.totalPrice = totalPrice;
+    this.orderId = orderId;
+  }
+
   public static Payment create(List<PaymentReservationInfo> infos, PaymentMethod method) {
-    Payment payment = new Payment();
-    payment.id = PaymentId.of();
-    payment.method = method;
-    payment.status = PaymentStatus.REQUESTED;
-    payment.totalAmount = calculateTotalAmount(infos);
+    Long totalPrice = calculateTotalPrice(infos);
+
+    Payment payment =
+        Payment.builder()
+            .method(method)
+            .status(PaymentStatus.REQUESTED)
+            .totalPrice(totalPrice)
+            .orderId(UUID.randomUUID())
+            .build();
+
     payment.addReservationLinks(infos);
 
-    // 결제 수단에 맞는 detail 생성
-    switch (method) {
-      case TOSS_CARD:
-        payment.detail = new TossCardDetail();
-        break;
-    }
-    // 더 추가 가능
-
     payment.validateLinks();
-    payment.validateAmount();
+    payment.validatePrice();
     payment.validateMethod();
     payment.validateDuplicateReservationIds();
 
@@ -98,15 +114,17 @@ public class Payment extends AbstractAuditEntity {
   // 예매-결제 링크 생성
   private void addReservationLinks(List<PaymentReservationInfo> infos) {
     for (PaymentReservationInfo info : infos) {
-      this.links.add(
-          new PaymentReservationLink(
-              this, info.reservationId(), info.amount(), LinkStatus.PENDING));
+      PaymentReservationLink link =
+          new PaymentReservationLink(this, info.reservationId(), info.price(), LinkStatus.PENDING);
+      this.links.add(link);
+      log.info("Added link, current size: {}", this.links.size());
     }
+    log.info("After adding links, size: {}", this.links.size());
   }
 
   // 결제 총 금액 계산
-  private static Long calculateTotalAmount(List<PaymentReservationInfo> infos) {
-    return infos.stream().mapToLong(PaymentReservationInfo::amount).sum();
+  private static Long calculateTotalPrice(List<PaymentReservationInfo> infos) {
+    return infos.stream().mapToLong(PaymentReservationInfo::price).sum();
   }
 
   // ==================================
@@ -197,9 +215,9 @@ public class Payment extends AbstractAuditEntity {
   }
 
   // 2. 결제 금액 검증
-  private void validateAmount() {
-    if (this.totalAmount == null || this.totalAmount <= 0) {
-      throw new PaymentException(PaymentErrorCode.INVALID_PAYMENT_AMOUNT);
+  private void validatePrice() {
+    if (this.totalPrice == null || this.totalPrice <= 0) {
+      throw new PaymentException(PaymentErrorCode.INVALID_PAYMENT_PRICE);
     }
   }
 
@@ -218,5 +236,10 @@ public class Payment extends AbstractAuditEntity {
     if (uniqueCount != this.links.size()) {
       throw new PaymentException(PaymentErrorCode.DUPLICATE_RESERVATION_ID);
     }
+  }
+
+  // detail 세팅하는 메서드
+  public void assignDetail(PaymentDetail detail) {
+    this.detail = detail;
   }
 }
