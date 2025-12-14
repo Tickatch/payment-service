@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/payments")
@@ -35,6 +37,18 @@ public class PaymentApi {
   public ApiResponse<?> paymentSuccess(
       @RequestParam String paymentKey, @RequestParam String orderId, @RequestParam long amount) {
     paymentService.confirmPayment(paymentKey, UUID.fromString(orderId), amount);
+    return ApiResponse.success();
+  }
+
+  // 3. 결제 실패
+  @GetMapping("/resp/fail")
+  public ApiResponse<?> paymentFail(
+      @RequestParam(required = false) String code,
+      @RequestParam(required = false) String message,
+      @RequestParam String orderId
+  ) {
+    log.warn("[PAYMENT-FAIL] orderId={}, code={}, message={}", orderId, code, message);
+    paymentService.failPayment(UUID.fromString(orderId));
     return ApiResponse.success();
   }
 }
