@@ -24,6 +24,9 @@ spring:
     import: optional:configserver:${CONFIG_SERVER_URL:https://www.pinjun.xyz/config}
 
   cloud:
+    openfeign:
+      okhttp:
+        enabled: true
     config:
       # ----- Config Server 연결 설정 -----
       uri: ${CONFIG_SERVER_URL:https://www.pinjun.xyz/config}

@@ -242,4 +242,9 @@ public class Payment extends AbstractAuditEntity {
   public void assignDetail(PaymentDetail detail) {
     this.detail = detail;
   }
+
+  // 연관 예매 조회 링크
+  public List<String> getReservationIds() {
+    return this.links.stream().map(PaymentReservationLink::getReservationId).toList();
+  }
 }
