@@ -107,8 +107,6 @@ public class PaymentService {
       throw new PaymentException(PaymentErrorCode.PAYMENT_KEY_GENERATION_FAILED);
     }
 
-    //    return jsonNode.get("paymentKey").asText();
-
     String paymentKey = paymentKeyNode.asText();
     log.info(
         "Payment created: {}, checkout URL: {}",
@@ -156,7 +154,12 @@ public class PaymentService {
       // 승인 상태 확인
       if (response.statusCode() == 200 && "DONE".equals(jsonNode.path("status").asText())) {
         TossCardDetail detail = TossCardDetail.create(payment, paymentKey);
+
+        // 결제 성공 상태로 변경
         payment.markSuccess();
+
+        // 결제-예매 링크 확정
+        payment.confirmReservationLinks();
 
         // 예매 쪽에 결제 성공 알리기
         reservationService.applyResult("SUCCESS", payment.getReservationIds());
