@@ -167,14 +167,14 @@ public class PaymentService {
         payment.confirmReservationLinks();
 
         // 예매 쪽에 결제 성공 알리기
-        //        reservationService.applyResult("SUCCESS", payment.getReservationIds());
+        reservationService.applyResult("SUCCESS", payment.getReservationIds());
 
       } else {
         // 실패 처리
         payment.markFail();
 
         // 예매 쪽에 결제 실패 알리기
-        //        reservationService.applyResult("FAIL", payment.getReservationIds());
+        reservationService.applyResult("FAIL", payment.getReservationIds());
       }
 
       // DB 저장
