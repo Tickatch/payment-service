@@ -2,6 +2,7 @@ package com.tickatch.paymentservice.payment.presentation.api;
 
 import com.tickatch.paymentservice.payment.application.service.PaymentService;
 import com.tickatch.paymentservice.payment.presentation.dto.CreatePaymentRequest;
+import com.tickatch.paymentservice.payment.presentation.dto.RefundPaymentRequest;
 import io.github.tickatch.common.api.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
@@ -43,12 +44,16 @@ public class PaymentApi {
   // 3. 결제 실패
   @GetMapping("/resp/fail")
   public ApiResponse<?> paymentFail(
-      @RequestParam(required = false) String code,
-      @RequestParam(required = false) String message,
-      @RequestParam String orderId
-  ) {
+      String code, @RequestParam(required = false) String message, @RequestParam String orderId) {
     log.warn("[PAYMENT-FAIL] orderId={}, code={}, message={}", orderId, code, message);
-    paymentService.failPayment(UUID.fromString(orderId));
+    paymentService.failPayment(UUID.fromString(orderId), code);
+    return ApiResponse.success();
+  }
+
+  // 4. 환불
+  @PostMapping("/refund")
+  public ApiResponse<Void> paymentRefund(@Valid @RequestBody RefundPaymentRequest request) {
+    paymentService.refundPayment(request.toRefundRequest());
     return ApiResponse.success();
   }
 }
