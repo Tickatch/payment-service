@@ -7,6 +7,7 @@ import com.tickatch.paymentservice.payment.application.dto.RefundRequest;
 import com.tickatch.paymentservice.payment.domain.Payment;
 import com.tickatch.paymentservice.payment.domain.PaymentDetail;
 import com.tickatch.paymentservice.payment.domain.PaymentMethod;
+import com.tickatch.paymentservice.payment.domain.PaymentStatus;
 import com.tickatch.paymentservice.payment.domain.RefundReason;
 import com.tickatch.paymentservice.payment.domain.TossCardDetail;
 import com.tickatch.paymentservice.payment.domain.dto.PaymentReservationInfo;
@@ -238,6 +239,12 @@ public class PaymentService {
     }
 
     Payment payment = payments.get(0);
+
+    // 이미 환불된 경우
+    if (payment.getStatus() == PaymentStatus.REFUND) {
+      log.info("[PAYMENT-REFUND] already refunded. paymentId={}", payment.getId());
+      return;
+    }
 
     // payment가 모든 예매 id 포함하고 있는지 확인
     Set<String> paymentReservationIds = new HashSet<>(payment.getReservationIds());
