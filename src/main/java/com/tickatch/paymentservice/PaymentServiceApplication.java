@@ -2,6 +2,7 @@ package com.tickatch.paymentservice;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.scheduling.annotation.EnableAsync;
 
 /**
@@ -12,6 +13,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
  * @author 김형섭
  * @since 1.0.0
  */
+@EnableFeignClients
 @EnableAsync
 @SpringBootApplication
 public class PaymentServiceApplication {

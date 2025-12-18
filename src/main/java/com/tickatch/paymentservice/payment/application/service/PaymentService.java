@@ -10,6 +10,7 @@ import com.tickatch.paymentservice.payment.domain.dto.PaymentReservationInfo;
 import com.tickatch.paymentservice.payment.domain.exception.PaymentErrorCode;
 import com.tickatch.paymentservice.payment.domain.exception.PaymentException;
 import com.tickatch.paymentservice.payment.domain.repository.PaymentRepository;
+import com.tickatch.paymentservice.payment.domain.service.ReservationService;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -32,6 +33,7 @@ public class PaymentService {
 
   private final ObjectMapper objectMapper;
   private final PaymentRepository paymentRepository;
+  private final ReservationService reservationService;
 
   @Value("${toss.secret-key}")
   private String secretKey;
@@ -73,8 +75,8 @@ public class PaymentService {
     String bodyJson =
         String.format(
             "{\"method\":\"CARD\", \"amount\":%d, \"orderId\":\"%s\", \"orderName\":\"테스트 결제\", "
-                + "\"successUrl\":\"http://localhost:8081/api/v1/payments/resp/success\", "
-                + "\"failUrl\":\"http://localhost:8081/api/v1/payments/resp/fail\"}",
+                + "\"successUrl\":\"http://localhost:8082/api/v1/payments/resp/success\", "
+                + "\"failUrl\":\"http://localhost:8082/api/v1/payments/resp/fail\"}",
             totalPrice, orderId);
 
     HttpRequest request =
@@ -105,8 +107,6 @@ public class PaymentService {
       throw new PaymentException(PaymentErrorCode.PAYMENT_KEY_GENERATION_FAILED);
     }
 
-    //    return jsonNode.get("paymentKey").asText();
-
     String paymentKey = paymentKeyNode.asText();
     log.info(
         "Payment created: {}, checkout URL: {}",
@@ -116,6 +116,7 @@ public class PaymentService {
   }
 
   // 결제 승인 처리
+  @Transactional
   public void confirmPayment(String paymentKey, UUID orderId, long totalPrice) {
     try {
       String url = "https://api.tosspayments.com/v1/payments/confirm";
@@ -153,10 +154,22 @@ public class PaymentService {
       // 승인 상태 확인
       if (response.statusCode() == 200 && "DONE".equals(jsonNode.path("status").asText())) {
         TossCardDetail detail = TossCardDetail.create(payment, paymentKey);
+
+        // 결제 성공 상태로 변경
         payment.markSuccess();
+
+        // 결제-예매 링크 확정
+        payment.confirmReservationLinks();
+
+        // 예매 쪽에 결제 성공 알리기
+        reservationService.applyResult("SUCCESS", payment.getReservationIds());
+
       } else {
         // 실패 처리
         payment.markFail();
+
+        // 예매 쪽에 결제 실패 알리기
+        reservationService.applyResult("FAIL", payment.getReservationIds());
       }
 
       // DB 저장
