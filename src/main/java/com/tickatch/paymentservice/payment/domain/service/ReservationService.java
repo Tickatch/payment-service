@@ -5,4 +5,6 @@ import java.util.List;
 public interface ReservationService {
 
   void applyResult(String status, List<String> reservationIds);
+
+  void changeStatus(List<String> reservationIds);
 }

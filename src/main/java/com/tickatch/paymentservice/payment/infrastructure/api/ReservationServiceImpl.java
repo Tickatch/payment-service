@@ -1,5 +1,6 @@
 package com.tickatch.paymentservice.payment.infrastructure.api;
 
+import com.tickatch.paymentservice.payment.application.dto.ChangeStatusRequest;
 import com.tickatch.paymentservice.payment.application.dto.PaymentResultRequest;
 import com.tickatch.paymentservice.payment.domain.service.ReservationService;
 import com.tickatch.paymentservice.payment.infrastructure.client.ReservationFeignClient;
@@ -16,5 +17,10 @@ public class ReservationServiceImpl implements ReservationService {
   @Override
   public void applyResult(String status, List<String> ids) {
     reservationFeignClient.applyPaymentResult(new PaymentResultRequest(status, ids));
+  }
+
+  @Override
+  public void changeStatus(List<String> ids) {
+    reservationFeignClient.changeReservationStatus(new ChangeStatusRequest(ids));
   }
 }
