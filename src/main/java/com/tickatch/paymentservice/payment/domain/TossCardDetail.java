@@ -9,11 +9,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class TossCardDetail extends PaymentDetail {
 
-  //  private String billingKey;
-
   public TossCardDetail(Payment payment, String paymentKey) {
     super(payment);
-    //    this.billingKey = billingKey;
     updatePaymentKey(paymentKey);
     payment.assignDetail(this);
   }

@@ -3,8 +3,12 @@ package com.tickatch.paymentservice.payment.application.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tickatch.paymentservice.payment.application.dto.PaymentRequest;
+import com.tickatch.paymentservice.payment.application.dto.RefundRequest;
 import com.tickatch.paymentservice.payment.domain.Payment;
+import com.tickatch.paymentservice.payment.domain.PaymentDetail;
 import com.tickatch.paymentservice.payment.domain.PaymentMethod;
+import com.tickatch.paymentservice.payment.domain.PaymentStatus;
+import com.tickatch.paymentservice.payment.domain.RefundReason;
 import com.tickatch.paymentservice.payment.domain.TossCardDetail;
 import com.tickatch.paymentservice.payment.domain.dto.PaymentReservationInfo;
 import com.tickatch.paymentservice.payment.domain.exception.PaymentErrorCode;
@@ -17,8 +21,10 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -180,16 +186,28 @@ public class PaymentService {
     }
   }
 
-  // 결제 실패 처리
+  // 결제 실패 처리 : 사용자 취소로 인한 실패, 그 이외의 이유로 인한 실패
   @Transactional
-  public void failPayment(UUID orderId) {
+  public void failPayment(UUID orderId, String code) {
 
-    Payment payment = paymentRepository.findByOrderId(orderId)
-        .orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+    Payment payment =
+        paymentRepository
+            .findByOrderId(orderId)
+            .orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
 
-    // 이미 성공 처리된 경우
-    if (payment.isSuccess()) {
-      log.warn("[PAYMENT-FAIL] already success payment. orderId={}", orderId);
+    // 실패 처리할 수 없는 경우
+    if (!payment.getStatus().canFail()) {
+      log.warn("invalid fail transition. status={}", payment.getStatus());
+      return;
+    }
+
+    // 사용자 취소로 인한 결제 실패
+    if ("PAY_PROCESS_CANCELED".equals(code)) {
+      // 결제 상태 cancel로 변경
+      payment.cancel(RefundReason.CUSTOMER_CANCEL);
+
+      // 예매 쪽에 전달
+      reservationService.applyResult("CANCEL", payment.getReservationIds());
       return;
     }
 
@@ -198,5 +216,90 @@ public class PaymentService {
 
     // 예매 쪽에 결제 실패 알리기
     reservationService.applyResult("FAIL", payment.getReservationIds());
+  }
+
+  // 환불: 예매 취소 시 환불, 상품 삭제 시 환불
+  @Transactional
+  public void refundPayment(RefundRequest request) {
+
+    List<String> reservationIds = request.reservationIds();
+    RefundReason reason = request.reason();
+
+    // 예매 id들이 속하는 payment 가져오기
+    List<Payment> payments = paymentRepository.findPaymentsByReservationIds(reservationIds);
+
+    // 결제가 없을 때
+    if (payments.isEmpty()) {
+      throw new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND);
+    }
+
+    // 예매 id가 서로 다른 결제에 속할 때
+    if (payments.size() != 1) {
+      throw new PaymentException(PaymentErrorCode.MULTIPLE_PAYMENT_FOUND);
+    }
+
+    Payment payment = payments.get(0);
+
+    // 이미 환불된 경우
+    if (payment.getStatus() == PaymentStatus.REFUND) {
+      log.info("[PAYMENT-REFUND] already refunded. paymentId={}", payment.getId());
+      return;
+    }
+
+    // payment가 모든 예매 id 포함하고 있는지 확인
+    Set<String> paymentReservationIds = new HashSet<>(payment.getReservationIds());
+
+    if (!paymentReservationIds.containsAll(reservationIds)) {
+      throw new PaymentException(PaymentErrorCode.INVALID_RESERVATION_FOR_PAYMENT);
+    }
+
+    // paymentDetail에서 payment key 가져오기
+    PaymentDetail detail = payment.getDetail();
+
+    // payment key 찾을 수 없을 때
+    if (detail == null || detail.getPaymentKey() == null) {
+      throw new PaymentException(PaymentErrorCode.PAYMENT_KEY_NOT_FOUND);
+    }
+
+    String paymentKey = detail.getPaymentKey();
+
+    try {
+      String auth = secretKey.trim() + ":";
+      String encodedAuth =
+          Base64.getEncoder().encodeToString(auth.getBytes(StandardCharsets.UTF_8));
+
+      HttpRequest httpRequest =
+          HttpRequest.newBuilder()
+              .uri(URI.create("https://api.tosspayments.com/v1/payments/" + paymentKey + "/cancel"))
+              .header("Authorization", "Basic " + encodedAuth)
+              .header("Content-Type", "application/json")
+              .POST(
+                  HttpRequest.BodyPublishers.ofString(
+                      "{\"cancelReason\":\"" + reason.name() + "\"}"))
+              .build();
+
+      HttpResponse<String> response =
+          HttpClient.newHttpClient().send(httpRequest, HttpResponse.BodyHandlers.ofString());
+
+      JsonNode jsonNode = objectMapper.readTree(response.body());
+
+      if (response.statusCode() == 200 && "CANCELED".equals(jsonNode.path("status").asText())) {
+
+        // 환불 성공으로 상태 변경
+        log.info("[SUCCESS REFUND] refund paymentId={}", payment.getId());
+        payment.refund(reason);
+      } else {
+        String errorMessage = jsonNode.path("message").asText("refund failed");
+
+        // 환불 실패로 상태 변경
+        payment.refundFail(reason);
+        log.error("[PAYMENT-REFUND-FAIL] {}", errorMessage);
+      }
+
+    } catch (Exception e) {
+      payment.refundFail(reason);
+      log.error("[PAYMENT-REFUND-ERROR]", e);
+      throw new PaymentException(PaymentErrorCode.INTERNAL_SERVER_ERROR);
+    }
   }
 }

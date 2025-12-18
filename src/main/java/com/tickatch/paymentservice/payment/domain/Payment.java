@@ -60,12 +60,9 @@ public class Payment extends AbstractAuditEntity {
   @Column
   private int retryCount = 0;
 
-  //  @Column
-  //  private String log;
-
-  // 취소 이유
+  // 환불 이유
   @Enumerated(EnumType.STRING)
-  private CancelReason cancelReason;
+  private RefundReason refundReason;
 
   // 결제 승인 시각
   @Column
@@ -146,21 +143,26 @@ public class Payment extends AbstractAuditEntity {
     this.approvedAt = LocalDateTime.now();
   }
 
+  // 결제 취소는 결제가 일어나기 전에 취소된 거 : processing 상태에서만 결제 취소로 갈 수 있다.
+  // processing -> cancel/success/fail
+  // 환불은 결제 완료 된 후에 취소되는거 : 예매가 취소될 때 환불. -> SUCCESS 상태에서만 가능
+  // success -> refund/refund_fail
+
   // 2. 결제 취소로 상태 변경
-  // 예매 취소 시 자동 결제 취소 / 사용자 취소 시 결제 취소
-  public void cancel(CancelReason reason) {
-    if (this.status != PaymentStatus.SUCCESS) {
+  // 결제 시도했지만 도중에 사용자가 취소할 경우
+  public void cancel(RefundReason reason) {
+    if (this.status != PaymentStatus.REQUESTED && this.status != PaymentStatus.PROCESSING) {
       throw new PaymentException(PaymentErrorCode.INVALID_STATUS_FOR_CANCEL);
     }
     this.status = PaymentStatus.CANCEL;
-    this.cancelReason = reason;
+    this.refundReason = reason;
     this.canceledAt = LocalDateTime.now();
   }
 
   // 3. 결제 실패로 상태 변경
   // 이전 상태: 결제 처리중
   public void markFail() {
-    if (this.status != PaymentStatus.PROCESSING) {
+    if (this.status != PaymentStatus.REQUESTED && this.status != PaymentStatus.PROCESSING) {
       throw new PaymentException(PaymentErrorCode.INVALID_STATUS_FOR_FAIL);
     }
     this.status = PaymentStatus.FAIL;
@@ -169,29 +171,33 @@ public class Payment extends AbstractAuditEntity {
 
   // 4. 환불로 상태 변경
   // 이전 상태: 결제 성공
-  public void refund() {
+  public void refund(RefundReason reason) {
     if (this.status != PaymentStatus.SUCCESS) {
       throw new PaymentException(PaymentErrorCode.INVALID_STATUS_FOR_REFUND);
     }
+
     this.status = PaymentStatus.REFUND;
+    this.refundReason = reason;
     this.refundedAt = LocalDateTime.now();
   }
 
   // 5. 환불 실패로 상태 변경
   // 이전 상태: 결제 성공
-  public void refundFail() {
+  public void refundFail(RefundReason reason) {
     if (this.status != PaymentStatus.SUCCESS) {
       throw new PaymentException(PaymentErrorCode.INVALID_STATUS_FOR_REFUND_FAIL);
     }
     this.status = PaymentStatus.REFUND_FAIL;
+    this.refundReason = reason;
   }
 
   // 6. 결제 시간 만료
-  // 이전 상태: 결제 요청, 결제중, 결제 실패
+  // 이전 상태: 결제 요청, 결제 취소, 결제중, 결제 실패
   public void expire() {
     if (this.status != PaymentStatus.REQUESTED
         && this.status != PaymentStatus.PROCESSING
-        && this.status != PaymentStatus.FAIL) {
+        && this.status != PaymentStatus.FAIL
+        && this.status != PaymentStatus.CANCEL) {
       throw new PaymentException(PaymentErrorCode.INVALID_STATUS_FOR_EXPIRED);
     }
 
