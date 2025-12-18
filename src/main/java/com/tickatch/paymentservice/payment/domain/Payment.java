@@ -31,8 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 public class Payment extends AbstractAuditEntity {
 
   // 결제 id
-  @EmbeddedId
-  private PaymentId id;
+  @EmbeddedId private PaymentId id;
 
   // 결제 상태
   @Enumerated(EnumType.STRING)
@@ -57,24 +56,20 @@ public class Payment extends AbstractAuditEntity {
   private UUID orderId;
 
   // 재시도 횟수
-  @Column
-  private int retryCount = 0;
+  @Column private int retryCount = 0;
 
   // 환불 이유
   @Enumerated(EnumType.STRING)
   private RefundReason refundReason;
 
   // 결제 승인 시각
-  @Column
-  private LocalDateTime approvedAt;
+  @Column private LocalDateTime approvedAt;
 
   // 결제 취소 시각
-  @Column
-  private LocalDateTime canceledAt;
+  @Column private LocalDateTime canceledAt;
 
   // 환불 시각
-  @Column
-  private LocalDateTime refundedAt;
+  @Column private LocalDateTime refundedAt;
 
   // 결제에 대한 예매 목록
   @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL)

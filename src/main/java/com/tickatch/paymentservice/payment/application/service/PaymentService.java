@@ -47,12 +47,15 @@ public class PaymentService {
   @Value("${app.base-url}")
   private String baseUrl;
 
+  @Value("${app.frontend-url}")
+  private String frontendUrl;
+
   // 1. 결제 생성
 
   // 결제 생성
   //  @Async
   @Transactional
-  public void createPayment(PaymentRequest paymentRequest) {
+  public String createPayment(PaymentRequest paymentRequest) {
 
     List<PaymentReservationInfo> infos =
         paymentRequest.payments().stream()
@@ -66,8 +69,7 @@ public class PaymentService {
 
     try {
       // 결제 키 발급
-      String paymentKey = createPaymentKey(payment.getOrderId(), payment.getTotalPrice());
-      log.info("Payment created: {}", paymentKey);
+      return createPaymentKey(payment.getOrderId(), payment.getTotalPrice());
     } catch (Exception e) {
       // 결제 키 발급 실패
       throw new PaymentException(PaymentErrorCode.PAYMENT_KEY_GENERATION_FAILED);
@@ -84,9 +86,9 @@ public class PaymentService {
     String bodyJson =
         String.format(
             "{\"method\":\"CARD\", \"amount\":%d, \"orderId\":\"%s\", \"orderName\":\"테스트 결제\", "
-                + "\"successUrl\":\"%s/api/v1/payments/resp/success\", "
-                + "\"failUrl\":\"%s/api/v1/payments/resp/fail\"}",
-            totalPrice, orderId, baseUrl, baseUrl);
+                + "\"successUrl\":\"%s/payment/callback\", "
+                + "\"failUrl\":\"%s/payment/callback\"}",
+            totalPrice, orderId, frontendUrl, frontendUrl);
 
     HttpRequest request =
         HttpRequest.newBuilder()
@@ -101,7 +103,8 @@ public class PaymentService {
 
     JsonNode jsonNode = objectMapper.readTree(response.body());
 
-    System.out.println("결제 UI : " + jsonNode.get("checkout").get("url").asText());
+    String checkoutUrl = jsonNode.get("checkout").get("url").asText();
+    System.out.println("결제 UI : " + checkoutUrl);
 
     // http 상태 체크
     if (response.statusCode() != 200) {
@@ -116,8 +119,7 @@ public class PaymentService {
       throw new PaymentException(PaymentErrorCode.PAYMENT_KEY_GENERATION_FAILED);
     }
 
-    String paymentKey = paymentKeyNode.asText();
-    return paymentKey;
+    return checkoutUrl;
   }
 
   // 결제 승인 처리
