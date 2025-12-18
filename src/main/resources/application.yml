@@ -24,6 +24,9 @@ spring:
     import: optional:configserver:${CONFIG_SERVER_URL:https://www.pinjun.xyz/config}
 
   cloud:
+    openfeign:
+      okhttp:
+        enabled: true
     config:
       # ----- Config Server 연결 설정 -----
       uri: ${CONFIG_SERVER_URL:https://www.pinjun.xyz/config}
@@ -83,3 +86,13 @@ eureka:
 # ========================================
 server:
   port: ${SERVER_PORT:8080}
+
+app:
+  base-url: ${APP_BASE_URL:http://localhost:${server.port}}
+  frontend-url: ${APP_FRONT_URL:http://localhost:${server.port}}
+
+# ========================================
+# toss 결제 시크릿 키
+# ========================================
+toss:
+  secret-key: ${TOSS_SECRET_KEY}

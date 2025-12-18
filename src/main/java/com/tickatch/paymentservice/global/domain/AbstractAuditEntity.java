@@ -1,12 +1,14 @@
 package com.tickatch.paymentservice.global.domain;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.EntityListeners;
 import jakarta.persistence.MappedSuperclass;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import lombok.Getter;
 import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.LastModifiedBy;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 /**
  * 엔티티의 전체 감사를 제공하는 추상 클래스.
@@ -19,23 +21,25 @@ import org.springframework.data.annotation.LastModifiedBy;
  */
 @Getter
 @MappedSuperclass
+@EntityListeners(AuditingEntityListener.class)
 public abstract class AbstractAuditEntity extends AbstractTimeEntity {
+
   /* 등록자 계정 */
-  @Column(name = "created_by", nullable = false)
   @CreatedBy
+  @Column(name = "created_by", nullable = false)
   private String createdBy;
 
   /* 수정자 계정 */
-  @Column(name = "updated_by", nullable = false)
   @LastModifiedBy
+  @Column(name = "updated_by", nullable = false)
   private String updatedBy;
 
   /* 삭제자 계정 */
-  @Column(name = "deleted_by")
+  @Column(insertable = false)
   private String deletedBy;
 
   /* 삭제 일시 */
-  @Column(name = "deleted_at")
+  @Column(insertable = false)
   private LocalDateTime deletedAt;
 
   /**

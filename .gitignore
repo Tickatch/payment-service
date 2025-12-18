@@ -38,3 +38,4 @@ out/
 
 gradle.properties
 .env
+generated/
