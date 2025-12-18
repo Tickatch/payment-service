@@ -6,6 +6,7 @@ import com.tickatch.paymentservice.payment.presentation.dto.RefundPaymentRequest
 import io.github.tickatch.common.api.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
+import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,10 +28,10 @@ public class PaymentApi {
   // 1. 결제 생성
   @PostMapping
   @Operation(summary = "새로운 결제 생성", description = "새로운 결제를 생성합니다.")
-  public ApiResponse<Void> createPayment(
+  public ApiResponse<Map<String, String>> createPayment(
       @Valid @RequestBody CreatePaymentRequest createPaymentRequest) {
-    paymentService.createPayment(createPaymentRequest.toPaymentRequest());
-    return ApiResponse.success();
+    String checkoutUrl = paymentService.createPayment(createPaymentRequest.toPaymentRequest());
+    return ApiResponse.success(Map.of("checkoutUrl", checkoutUrl));
   }
 
   // 2. 결제 성공
