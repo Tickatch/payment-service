@@ -4,3 +4,6 @@ spring:
   cloud:
     config:
       enabled: false
+
+toss:
+  secret-key: dummy_secret_for_test

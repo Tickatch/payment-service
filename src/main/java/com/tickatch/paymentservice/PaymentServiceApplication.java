@@ -2,6 +2,7 @@ package com.tickatch.paymentservice;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableAsync;
 
 /**
  * Spring Boot 애플리케이션의 진입점 클래스.
@@ -11,6 +12,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * @author 김형섭
  * @since 1.0.0
  */
+@EnableAsync
 @SpringBootApplication
 public class PaymentServiceApplication {
 
