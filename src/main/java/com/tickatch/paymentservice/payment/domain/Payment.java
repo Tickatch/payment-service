@@ -259,4 +259,9 @@ public class Payment extends AbstractAuditEntity {
       link.confirm();
     }
   }
+
+  // 결제 상태가 success인지 확인
+  public boolean isSuccess() {
+    return this.status == PaymentStatus.SUCCESS;
+  }
 }

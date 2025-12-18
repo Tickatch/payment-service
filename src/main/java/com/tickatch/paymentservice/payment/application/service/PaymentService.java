@@ -38,6 +38,9 @@ public class PaymentService {
   @Value("${toss.secret-key}")
   private String secretKey;
 
+  @Value("${app.base-url}")
+  private String baseUrl;
+
   // 1. 결제 생성
 
   // 결제 생성
@@ -75,9 +78,9 @@ public class PaymentService {
     String bodyJson =
         String.format(
             "{\"method\":\"CARD\", \"amount\":%d, \"orderId\":\"%s\", \"orderName\":\"테스트 결제\", "
-                + "\"successUrl\":\"http://localhost:8082/api/v1/payments/resp/success\", "
-                + "\"failUrl\":\"http://localhost:8082/api/v1/payments/resp/fail\"}",
-            totalPrice, orderId);
+                + "\"successUrl\":\"%s/api/v1/payments/resp/success\", "
+                + "\"failUrl\":\"%s/api/v1/payments/resp/fail\"}",
+            totalPrice, orderId, baseUrl, baseUrl);
 
     HttpRequest request =
         HttpRequest.newBuilder()
@@ -108,10 +111,6 @@ public class PaymentService {
     }
 
     String paymentKey = paymentKeyNode.asText();
-    log.info(
-        "Payment created: {}, checkout URL: {}",
-        paymentKey,
-        jsonNode.path("checkout").path("url").asText());
     return paymentKey;
   }
 
@@ -179,5 +178,25 @@ public class PaymentService {
       log.error("[TOSS-CONFIRM-ERROR] 결제 승인 중 오류 발생", e);
       throw new PaymentException(PaymentErrorCode.PAYMENT_CONFIRM_FAILED, e);
     }
+  }
+
+  // 결제 실패 처리
+  @Transactional
+  public void failPayment(UUID orderId) {
+
+    Payment payment = paymentRepository.findByOrderId(orderId)
+        .orElseThrow(() -> new PaymentException(PaymentErrorCode.PAYMENT_NOT_FOUND));
+
+    // 이미 성공 처리된 경우
+    if (payment.isSuccess()) {
+      log.warn("[PAYMENT-FAIL] already success payment. orderId={}", orderId);
+      return;
+    }
+
+    // 결제 실패로 상태 변경
+    payment.markFail();
+
+    // 예매 쪽에 결제 실패 알리기
+    reservationService.applyResult("FAIL", payment.getReservationIds());
   }
 }

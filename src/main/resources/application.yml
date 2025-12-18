@@ -87,6 +87,9 @@ eureka:
 server:
   port: ${SERVER_PORT:8080}
 
+app:
+  base-url: http://localhost:${server.port}
+
 # ========================================
 # toss 결제 시크릿 키
 # ========================================
