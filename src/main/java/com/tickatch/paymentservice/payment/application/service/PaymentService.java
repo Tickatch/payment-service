@@ -60,13 +60,21 @@ public class PaymentService {
             .toList();
 
     // 결제 엔티티 생성 후 저장(id 생성)
-    Payment payment = Payment.create(infos, PaymentMethod.TOSS_CARD);
+    Payment payment = Payment.create(paymentRequest.orderName(), infos, PaymentMethod.TOSS_CARD);
     payment.markProcessing();
     paymentRepository.save(payment);
 
+    // 예매 쪽 상태 변경
     try {
-      // 결제 키 발급
-      String paymentKey = createPaymentKey(payment.getOrderId(), payment.getTotalPrice());
+      reservationService.changeStatus(payment.getReservationIds());
+    } catch (Exception e) {
+      throw new PaymentException(PaymentErrorCode.RESERVATION_STATUS_CHANGE_FAILED);
+    }
+
+    // 결제 키 발급
+    try {
+      String paymentKey =
+          createPaymentKey(payment.getOrderName(), payment.getOrderId(), payment.getTotalPrice());
       log.info("Payment created: {}", paymentKey);
     } catch (Exception e) {
       // 결제 키 발급 실패
@@ -75,7 +83,8 @@ public class PaymentService {
   }
 
   // 결제 키 발급
-  private String createPaymentKey(UUID orderId, long totalPrice) throws Exception {
+  private String createPaymentKey(String orderName, UUID orderId, long totalPrice)
+      throws Exception {
 
     String url = "https://api.tosspayments.com/v1/payments";
     String auth = secretKey.trim() + ":";
@@ -83,10 +92,10 @@ public class PaymentService {
 
     String bodyJson =
         String.format(
-            "{\"method\":\"CARD\", \"amount\":%d, \"orderId\":\"%s\", \"orderName\":\"테스트 결제\", "
+            "{\"method\":\"CARD\", \"amount\":%d, \"orderId\":\"%s\", \"orderName\":\"%s\", "
                 + "\"successUrl\":\"%s/api/v1/payments/resp/success\", "
                 + "\"failUrl\":\"%s/api/v1/payments/resp/fail\"}",
-            totalPrice, orderId, baseUrl, baseUrl);
+            totalPrice, orderId, orderName, baseUrl, baseUrl);
 
     HttpRequest request =
         HttpRequest.newBuilder()

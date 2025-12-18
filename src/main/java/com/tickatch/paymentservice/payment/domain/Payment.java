@@ -31,8 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 public class Payment extends AbstractAuditEntity {
 
   // 결제 id
-  @EmbeddedId
-  private PaymentId id;
+  @EmbeddedId private PaymentId id;
 
   // 결제 상태
   @Enumerated(EnumType.STRING)
@@ -52,29 +51,29 @@ public class Payment extends AbstractAuditEntity {
   @OneToOne(mappedBy = "payment", cascade = CascadeType.ALL)
   private PaymentDetail detail;
 
+  // 주문명
+  @Column(nullable = false)
+  private String orderName;
+
   // 결제 식별용 uuid(toss)
   @Column(nullable = false, updatable = false)
   private UUID orderId;
 
   // 재시도 횟수
-  @Column
-  private int retryCount = 0;
+  @Column private int retryCount = 0;
 
   // 환불 이유
   @Enumerated(EnumType.STRING)
   private RefundReason refundReason;
 
   // 결제 승인 시각
-  @Column
-  private LocalDateTime approvedAt;
+  @Column private LocalDateTime approvedAt;
 
   // 결제 취소 시각
-  @Column
-  private LocalDateTime canceledAt;
+  @Column private LocalDateTime canceledAt;
 
   // 환불 시각
-  @Column
-  private LocalDateTime refundedAt;
+  @Column private LocalDateTime refundedAt;
 
   // 결제에 대한 예매 목록
   @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL)
@@ -84,15 +83,18 @@ public class Payment extends AbstractAuditEntity {
 
   // 생성
   @Builder(access = AccessLevel.PRIVATE)
-  public Payment(PaymentMethod method, PaymentStatus status, Long totalPrice, UUID orderId) {
+  public Payment(
+      PaymentMethod method, PaymentStatus status, Long totalPrice, String orderName, UUID orderId) {
     this.id = PaymentId.of();
     this.method = method;
     this.status = status;
     this.totalPrice = totalPrice;
+    this.orderName = orderName;
     this.orderId = orderId;
   }
 
-  public static Payment create(List<PaymentReservationInfo> infos, PaymentMethod method) {
+  public static Payment create(
+      String orderName, List<PaymentReservationInfo> infos, PaymentMethod method) {
     Long totalPrice = calculateTotalPrice(infos);
 
     Payment payment =
@@ -100,6 +102,7 @@ public class Payment extends AbstractAuditEntity {
             .method(method)
             .status(PaymentStatus.REQUESTED)
             .totalPrice(totalPrice)
+            .orderName(orderName)
             .orderId(UUID.randomUUID())
             .build();
 
