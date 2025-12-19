@@ -7,6 +7,7 @@ spring:
 
 app:
   base-url: http://localhost:8080
+  frontend-url: http://localhost:8080
 
 toss:
   secret-key: dummy_secret_for_test

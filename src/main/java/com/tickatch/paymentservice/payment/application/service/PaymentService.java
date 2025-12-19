@@ -15,6 +15,7 @@ import com.tickatch.paymentservice.payment.domain.exception.PaymentErrorCode;
 import com.tickatch.paymentservice.payment.domain.exception.PaymentException;
 import com.tickatch.paymentservice.payment.domain.repository.PaymentRepository;
 import com.tickatch.paymentservice.payment.domain.service.ReservationService;
+import feign.FeignException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -47,12 +48,15 @@ public class PaymentService {
   @Value("${app.base-url}")
   private String baseUrl;
 
+  @Value("${app.frontend-url}")
+  private String frontendUrl;
+
   // 1. 결제 생성
 
   // 결제 생성
   //  @Async
   @Transactional
-  public void createPayment(PaymentRequest paymentRequest) {
+  public String createPayment(PaymentRequest paymentRequest) {
 
     List<PaymentReservationInfo> infos =
         paymentRequest.payments().stream()
@@ -67,15 +71,16 @@ public class PaymentService {
     // 예매 쪽 상태 변경
     try {
       reservationService.changeStatus(payment.getReservationIds());
-    } catch (Exception e) {
+    } catch (FeignException e) {
+      log.error("Reservation status change failed. status={}", e.status());
       throw new PaymentException(PaymentErrorCode.RESERVATION_STATUS_CHANGE_FAILED);
     }
 
     // 결제 키 발급
     try {
-      String paymentKey =
-          createPaymentKey(payment.getOrderName(), payment.getOrderId(), payment.getTotalPrice());
-      log.info("Payment created: {}", paymentKey);
+      // 성공 시 checkout url 반환
+      return createPaymentKey(
+          payment.getOrderName(), payment.getOrderId(), payment.getTotalPrice());
     } catch (Exception e) {
       // 결제 키 발급 실패
       throw new PaymentException(PaymentErrorCode.PAYMENT_KEY_GENERATION_FAILED);
@@ -93,9 +98,9 @@ public class PaymentService {
     String bodyJson =
         String.format(
             "{\"method\":\"CARD\", \"amount\":%d, \"orderId\":\"%s\", \"orderName\":\"%s\", "
-                + "\"successUrl\":\"%s/api/v1/payments/resp/success\", "
-                + "\"failUrl\":\"%s/api/v1/payments/resp/fail\"}",
-            totalPrice, orderId, orderName, baseUrl, baseUrl);
+                + "\"successUrl\":\"%s/payment/callback\", "
+                + "\"failUrl\":\"%s/payment/callback\"}",
+            totalPrice, orderId, orderName, frontendUrl, frontendUrl);
 
     HttpRequest request =
         HttpRequest.newBuilder()
@@ -110,7 +115,8 @@ public class PaymentService {
 
     JsonNode jsonNode = objectMapper.readTree(response.body());
 
-    System.out.println("결제 UI : " + jsonNode.get("checkout").get("url").asText());
+    String checkoutUrl = jsonNode.get("checkout").get("url").asText();
+    System.out.println("결제 UI : " + checkoutUrl);
 
     // http 상태 체크
     if (response.statusCode() != 200) {
@@ -125,8 +131,7 @@ public class PaymentService {
       throw new PaymentException(PaymentErrorCode.PAYMENT_KEY_GENERATION_FAILED);
     }
 
-    String paymentKey = paymentKeyNode.asText();
-    return paymentKey;
+    return checkoutUrl;
   }
 
   // 결제 승인 처리
