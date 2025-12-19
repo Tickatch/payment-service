@@ -51,6 +51,10 @@ public class Payment extends AbstractAuditEntity {
   @OneToOne(mappedBy = "payment", cascade = CascadeType.ALL)
   private PaymentDetail detail;
 
+  // 주문명
+  @Column(nullable = false)
+  private String orderName;
+
   // 결제 식별용 uuid(toss)
   @Column(nullable = false, updatable = false)
   private UUID orderId;
@@ -79,15 +83,18 @@ public class Payment extends AbstractAuditEntity {
 
   // 생성
   @Builder(access = AccessLevel.PRIVATE)
-  public Payment(PaymentMethod method, PaymentStatus status, Long totalPrice, UUID orderId) {
+  public Payment(
+      PaymentMethod method, PaymentStatus status, Long totalPrice, String orderName, UUID orderId) {
     this.id = PaymentId.of();
     this.method = method;
     this.status = status;
     this.totalPrice = totalPrice;
+    this.orderName = orderName;
     this.orderId = orderId;
   }
 
-  public static Payment create(List<PaymentReservationInfo> infos, PaymentMethod method) {
+  public static Payment create(
+      String orderName, List<PaymentReservationInfo> infos, PaymentMethod method) {
     Long totalPrice = calculateTotalPrice(infos);
 
     Payment payment =
@@ -95,6 +102,7 @@ public class Payment extends AbstractAuditEntity {
             .method(method)
             .status(PaymentStatus.REQUESTED)
             .totalPrice(totalPrice)
+            .orderName(orderName)
             .orderId(UUID.randomUUID())
             .build();
 

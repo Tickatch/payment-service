@@ -15,6 +15,7 @@ import com.tickatch.paymentservice.payment.domain.exception.PaymentErrorCode;
 import com.tickatch.paymentservice.payment.domain.exception.PaymentException;
 import com.tickatch.paymentservice.payment.domain.repository.PaymentRepository;
 import com.tickatch.paymentservice.payment.domain.service.ReservationService;
+import feign.FeignException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -63,13 +64,23 @@ public class PaymentService {
             .toList();
 
     // 결제 엔티티 생성 후 저장(id 생성)
-    Payment payment = Payment.create(infos, PaymentMethod.TOSS_CARD);
+    Payment payment = Payment.create(paymentRequest.orderName(), infos, PaymentMethod.TOSS_CARD);
     payment.markProcessing();
     paymentRepository.save(payment);
 
+    // 예매 쪽 상태 변경
     try {
-      // 결제 키 발급
-      return createPaymentKey(payment.getOrderId(), payment.getTotalPrice());
+      reservationService.changeStatus(payment.getReservationIds());
+    } catch (FeignException e) {
+      log.error("Reservation status change failed. status={}", e.status());
+      throw new PaymentException(PaymentErrorCode.RESERVATION_STATUS_CHANGE_FAILED);
+    }
+
+    // 결제 키 발급
+    try {
+      // 성공 시 checkout url 반환
+      return createPaymentKey(
+          payment.getOrderName(), payment.getOrderId(), payment.getTotalPrice());
     } catch (Exception e) {
       // 결제 키 발급 실패
       throw new PaymentException(PaymentErrorCode.PAYMENT_KEY_GENERATION_FAILED);
@@ -77,7 +88,8 @@ public class PaymentService {
   }
 
   // 결제 키 발급
-  private String createPaymentKey(UUID orderId, long totalPrice) throws Exception {
+  private String createPaymentKey(String orderName, UUID orderId, long totalPrice)
+      throws Exception {
 
     String url = "https://api.tosspayments.com/v1/payments";
     String auth = secretKey.trim() + ":";
@@ -85,10 +97,10 @@ public class PaymentService {
 
     String bodyJson =
         String.format(
-            "{\"method\":\"CARD\", \"amount\":%d, \"orderId\":\"%s\", \"orderName\":\"테스트 결제\", "
+            "{\"method\":\"CARD\", \"amount\":%d, \"orderId\":\"%s\", \"orderName\":\"%s\", "
                 + "\"successUrl\":\"%s/payment/callback\", "
                 + "\"failUrl\":\"%s/payment/callback\"}",
-            totalPrice, orderId, frontendUrl, frontendUrl);
+            totalPrice, orderId, orderName, frontendUrl, frontendUrl);
 
     HttpRequest request =
         HttpRequest.newBuilder()
