@@ -10,7 +10,6 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -24,7 +23,7 @@ public class RabbitMQPaymentLogEventPublisher implements PaymentLogEventPublishe
 
   private final RabbitTemplate rabbitTemplate;
 
-  @Value("${messaging.exchange.payment:tickatch.payment}")
+  @Value("${messaging.exchange.payment:tickatch.log}")
   private String paymentExchange;
 
   @Override
@@ -55,7 +54,7 @@ public class RabbitMQPaymentLogEventPublisher implements PaymentLogEventPublishe
           event.actionType(),
           paymentExchange,
           ROUTING_KEY);
-    } catch (AmqpException e) {
+    } catch (Exception e) {
       log.error(
           "{} 이벤트 발행 실패: exchange={}, routingKey={}, event={}",
           event.actionType(),
