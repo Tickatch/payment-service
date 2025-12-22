@@ -1,5 +1,7 @@
 package com.tickatch.paymentservice.payment.presentation.api;
 
+import com.tickatch.paymentservice.global.config.AuthExtractor;
+import com.tickatch.paymentservice.global.config.AuthExtractor.AuthInfo;
 import com.tickatch.paymentservice.payment.application.service.PaymentService;
 import com.tickatch.paymentservice.payment.presentation.dto.CreatePaymentRequest;
 import com.tickatch.paymentservice.payment.presentation.dto.RefundPaymentRequest;
@@ -54,7 +56,9 @@ public class PaymentApi {
   // 4. 환불
   @PostMapping("/refund")
   public ApiResponse<Void> paymentRefund(@Valid @RequestBody RefundPaymentRequest request) {
-    paymentService.refundPayment(request.toRefundRequest());
+    AuthInfo authInfo = AuthExtractor.extract();
+
+    paymentService.refundPayment(request.toRefundRequest(), authInfo);
     return ApiResponse.success();
   }
 }

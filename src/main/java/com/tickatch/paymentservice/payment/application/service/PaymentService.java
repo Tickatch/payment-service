@@ -2,6 +2,7 @@ package com.tickatch.paymentservice.payment.application.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.tickatch.paymentservice.global.config.AuthExtractor.AuthInfo;
 import com.tickatch.paymentservice.payment.application.PaymentActionType;
 import com.tickatch.paymentservice.payment.application.PaymentLogEventPublisher;
 import com.tickatch.paymentservice.payment.application.dto.PaymentRequest;
@@ -197,7 +198,7 @@ public class PaymentService {
   // 환불: 예매 취소 시 환불, 상품 삭제 시 환불
 
   @Transactional
-  public void refundPayment(RefundRequest request) {
+  public void refundPayment(RefundRequest request, AuthInfo authInfo) {
 
     List<String> reservationIds = request.reservationIds();
     RefundReason reason = request.reason();
@@ -216,6 +217,8 @@ public class PaymentService {
     }
 
     Payment payment = payments.get(0);
+
+    validatePaymentOwner(payment, authInfo);
 
     // 이미 환불된 경우
     if (payment.getStatus() == PaymentStatus.REFUND) {
@@ -344,5 +347,14 @@ public class PaymentService {
   private void logAction(Payment payment, PaymentActionType actionType) {
     logEventPublisher.publish(
         payment.getId().toUuid(), payment.getMethod(), payment.getRetryCount(), actionType.name());
+  }
+
+  private void validatePaymentOwner(Payment payment, AuthInfo authInfo) {
+    if (authInfo.isAdmin()) {
+      return;
+    }
+    if (!payment.getCreatedBy().equals(authInfo.userId())) {
+      throw new PaymentException(PaymentErrorCode.PAYMENT_OWNER_MISMATCH);
+    }
   }
 }
