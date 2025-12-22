@@ -1,5 +1,8 @@
 package com.tickatch.paymentservice.payment.infrastructure;
 
+import static com.tickatch.paymentservice.payment.infrastructure.config.RabbitMQConfig.LOG_EXCHANGE;
+import static com.tickatch.paymentservice.payment.infrastructure.config.RabbitMQConfig.ROUTING_KEY;
+
 import com.tickatch.paymentservice.global.config.ActorExtractor;
 import com.tickatch.paymentservice.global.config.ActorExtractor.ActorInfo;
 import com.tickatch.paymentservice.payment.application.PaymentLogEventPublisher;
@@ -11,7 +14,6 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -19,12 +21,7 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class RabbitMQPaymentLogEventPublisher implements PaymentLogEventPublisher {
 
-  private static final String ROUTING_KEY = "payment.log";
-
   private final RabbitTemplate rabbitTemplate;
-
-  @Value("${messaging.exchange.payment:tickatch.log}")
-  private String paymentExchange;
 
   @Override
   public void publish(UUID paymentId, PaymentMethod method, int retryCount, String actionType) {
@@ -48,17 +45,17 @@ public class RabbitMQPaymentLogEventPublisher implements PaymentLogEventPublishe
     log.info("{} 로그 이벤트 발행 시작", event.actionType());
 
     try {
-      rabbitTemplate.convertAndSend(paymentExchange, ROUTING_KEY, event);
+      rabbitTemplate.convertAndSend(LOG_EXCHANGE, ROUTING_KEY, event);
       log.info(
           "{} 이벤트 발행 완료: exchange={}, routingKey={}",
           event.actionType(),
-          paymentExchange,
+          LOG_EXCHANGE,
           ROUTING_KEY);
     } catch (Exception e) {
       log.error(
           "{} 이벤트 발행 실패: exchange={}, routingKey={}, event={}",
           event.actionType(),
-          paymentExchange,
+          LOG_EXCHANGE,
           ROUTING_KEY,
           event,
           e);
