@@ -2,6 +2,9 @@ package com.tickatch.paymentservice.payment.application.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.tickatch.paymentservice.global.config.AuthExtractor.AuthInfo;
+import com.tickatch.paymentservice.payment.application.PaymentActionType;
+import com.tickatch.paymentservice.payment.application.PaymentLogEventPublisher;
 import com.tickatch.paymentservice.payment.application.dto.PaymentRequest;
 import com.tickatch.paymentservice.payment.application.dto.RefundRequest;
 import com.tickatch.paymentservice.payment.domain.Payment;
@@ -15,6 +18,7 @@ import com.tickatch.paymentservice.payment.domain.exception.PaymentErrorCode;
 import com.tickatch.paymentservice.payment.domain.exception.PaymentException;
 import com.tickatch.paymentservice.payment.domain.repository.PaymentRepository;
 import com.tickatch.paymentservice.payment.domain.service.ReservationService;
+import feign.FeignException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -40,6 +44,7 @@ public class PaymentService {
   private final ObjectMapper objectMapper;
   private final PaymentRepository paymentRepository;
   private final ReservationService reservationService;
+  private final PaymentLogEventPublisher logEventPublisher;
 
   @Value("${toss.secret-key}")
   private String secretKey;
@@ -63,66 +68,28 @@ public class PaymentService {
             .toList();
 
     // 결제 엔티티 생성 후 저장(id 생성)
-    Payment payment = Payment.create(infos, PaymentMethod.TOSS_CARD);
+    Payment payment = Payment.create(paymentRequest.orderName(), infos, PaymentMethod.TOSS_CARD);
     payment.markProcessing();
     paymentRepository.save(payment);
 
+    // 예매 쪽 상태 변경
     try {
-      // 결제 키 발급
-      return createPaymentKey(payment.getOrderId(), payment.getTotalPrice());
-    } catch (Exception e) {
-      // 결제 키 발급 실패
-      throw new PaymentException(PaymentErrorCode.PAYMENT_KEY_GENERATION_FAILED);
-    }
-  }
-
-  // 결제 키 발급
-  private String createPaymentKey(UUID orderId, long totalPrice) throws Exception {
-
-    String url = "https://api.tosspayments.com/v1/payments";
-    String auth = secretKey.trim() + ":";
-    String encodedAuth = Base64.getEncoder().encodeToString(auth.getBytes(StandardCharsets.UTF_8));
-
-    String bodyJson =
-        String.format(
-            "{\"method\":\"CARD\", \"amount\":%d, \"orderId\":\"%s\", \"orderName\":\"테스트 결제\", "
-                + "\"successUrl\":\"%s/payment/callback\", "
-                + "\"failUrl\":\"%s/payment/callback\"}",
-            totalPrice, orderId, frontendUrl, frontendUrl);
-
-    HttpRequest request =
-        HttpRequest.newBuilder()
-            .uri(URI.create(url))
-            .header("Authorization", "Basic " + encodedAuth)
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(bodyJson))
-            .build();
-
-    HttpResponse<String> response =
-        HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
-
-    JsonNode jsonNode = objectMapper.readTree(response.body());
-
-    String checkoutUrl = jsonNode.get("checkout").get("url").asText();
-    System.out.println("결제 UI : " + checkoutUrl);
-
-    // http 상태 체크
-    if (response.statusCode() != 200) {
-      log.error("[TOSS-PAYMENT-ERROR] status={}, body={}", response.statusCode(), response.body());
-      throw new PaymentException(PaymentErrorCode.PAYMENT_KEY_GENERATION_FAILED);
+      reservationService.changeStatus(payment.getReservationIds());
+    } catch (FeignException e) {
+      log.error("Reservation status change failed. status={}", e.status());
+      throw new PaymentException(PaymentErrorCode.RESERVATION_STATUS_CHANGE_FAILED);
     }
 
-    // paymentKey 존재 여부 확인
-    JsonNode paymentKeyNode = jsonNode.get("paymentKey");
-    if (paymentKeyNode == null || paymentKeyNode.asText().isBlank()) {
-      log.error("[TOSS-PAYMENT-ERROR] paymentKey missing, body={}", response.body());
-      throw new PaymentException(PaymentErrorCode.PAYMENT_KEY_GENERATION_FAILED);
-    }
+    String paymentKey =
+        createPaymentKey(payment.getOrderName(), payment.getOrderId(), payment.getTotalPrice());
 
-    return checkoutUrl;
+    logAction(payment, PaymentActionType.CREATE);
+
+    return paymentKey;
   }
 
   // 결제 승인 처리
+
   @Transactional
   public void confirmPayment(String paymentKey, UUID orderId, long totalPrice) {
     try {
@@ -171,12 +138,15 @@ public class PaymentService {
         // 예매 쪽에 결제 성공 알리기
         reservationService.applyResult("SUCCESS", payment.getReservationIds());
 
+        logAction(payment, PaymentActionType.CONFIRM);
       } else {
         // 실패 처리
         payment.markFail();
 
         // 예매 쪽에 결제 실패 알리기
         reservationService.applyResult("FAIL", payment.getReservationIds());
+
+        logAction(payment, PaymentActionType.CONFIRM_FAIL);
       }
 
       // DB 저장
@@ -189,6 +159,7 @@ public class PaymentService {
   }
 
   // 결제 실패 처리 : 사용자 취소로 인한 실패, 그 이외의 이유로 인한 실패
+
   @Transactional
   public void failPayment(UUID orderId, String code) {
 
@@ -210,6 +181,8 @@ public class PaymentService {
 
       // 예매 쪽에 전달
       reservationService.applyResult("CANCEL", payment.getReservationIds());
+
+      logAction(payment, PaymentActionType.CANCEL);
       return;
     }
 
@@ -218,11 +191,14 @@ public class PaymentService {
 
     // 예매 쪽에 결제 실패 알리기
     reservationService.applyResult("FAIL", payment.getReservationIds());
+
+    logAction(payment, PaymentActionType.CONFIRM_FAIL);
   }
 
   // 환불: 예매 취소 시 환불, 상품 삭제 시 환불
+
   @Transactional
-  public void refundPayment(RefundRequest request) {
+  public void refundPayment(RefundRequest request, AuthInfo authInfo) {
 
     List<String> reservationIds = request.reservationIds();
     RefundReason reason = request.reason();
@@ -241,6 +217,8 @@ public class PaymentService {
     }
 
     Payment payment = payments.get(0);
+
+    validatePaymentOwner(payment, authInfo);
 
     // 이미 환불된 경우
     if (payment.getStatus() == PaymentStatus.REFUND) {
@@ -290,18 +268,93 @@ public class PaymentService {
         // 환불 성공으로 상태 변경
         log.info("[SUCCESS REFUND] refund paymentId={}", payment.getId());
         payment.refund(reason);
+
+        logAction(payment, PaymentActionType.REFUND);
       } else {
         String errorMessage = jsonNode.path("message").asText("refund failed");
 
         // 환불 실패로 상태 변경
         payment.refundFail(reason);
         log.error("[PAYMENT-REFUND-FAIL] {}", errorMessage);
+
+        logAction(payment, PaymentActionType.REFUND_FAIL);
       }
 
     } catch (Exception e) {
       payment.refundFail(reason);
       log.error("[PAYMENT-REFUND-ERROR]", e);
+      logAction(payment, PaymentActionType.REFUND_FAIL);
+
       throw new PaymentException(PaymentErrorCode.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  // 결제 키 발급
+
+  private String createPaymentKey(String orderName, UUID orderId, long totalPrice) {
+    try {
+      String url = "https://api.tosspayments.com/v1/payments";
+      String auth = secretKey.trim() + ":";
+      String encodedAuth =
+          Base64.getEncoder().encodeToString(auth.getBytes(StandardCharsets.UTF_8));
+
+      String bodyJson =
+          String.format(
+              "{\"method\":\"CARD\", \"amount\":%d, \"orderId\":\"%s\", \"orderName\":\"%s\", "
+                  + "\"successUrl\":\"%s/payment/callback\", "
+                  + "\"failUrl\":\"%s/payment/callback\"}",
+              totalPrice, orderId, orderName, frontendUrl, frontendUrl);
+
+      HttpRequest request =
+          HttpRequest.newBuilder()
+              .uri(URI.create(url))
+              .header("Authorization", "Basic " + encodedAuth)
+              .header("Content-Type", "application/json")
+              .POST(HttpRequest.BodyPublishers.ofString(bodyJson))
+              .build();
+
+      HttpResponse<String> response =
+          HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+
+      JsonNode jsonNode = objectMapper.readTree(response.body());
+
+      String checkoutUrl = jsonNode.get("checkout").get("url").asText();
+      System.out.println("결제 UI : " + checkoutUrl);
+
+      // http 상태 체크
+      if (response.statusCode() != 200) {
+        log.error(
+            "[TOSS-PAYMENT-ERROR] status={}, body={}", response.statusCode(), response.body());
+        throw new PaymentException(PaymentErrorCode.PAYMENT_KEY_GENERATION_FAILED);
+      }
+
+      // paymentKey 존재 여부 확인
+      JsonNode paymentKeyNode = jsonNode.get("paymentKey");
+      if (paymentKeyNode == null || paymentKeyNode.asText().isBlank()) {
+        log.error("[TOSS-PAYMENT-ERROR] paymentKey missing, body={}", response.body());
+        throw new PaymentException(PaymentErrorCode.PAYMENT_KEY_GENERATION_FAILED);
+      }
+
+      return checkoutUrl;
+    } catch (PaymentException e) {
+      throw e;
+    } catch (Exception e) {
+      // 결제 키 발급 실패
+      throw new PaymentException(PaymentErrorCode.PAYMENT_KEY_GENERATION_FAILED);
+    }
+  }
+
+  private void logAction(Payment payment, PaymentActionType actionType) {
+    logEventPublisher.publish(
+        payment.getId().toUuid(), payment.getMethod(), payment.getRetryCount(), actionType.name());
+  }
+
+  private void validatePaymentOwner(Payment payment, AuthInfo authInfo) {
+    if (authInfo.isAdmin()) {
+      return;
+    }
+    if (!payment.getCreatedBy().equals(authInfo.userId())) {
+      throw new PaymentException(PaymentErrorCode.PAYMENT_OWNER_MISMATCH);
     }
   }
 }
